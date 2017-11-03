@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# bin/start_queue
+
+echo "Removing old server pid's if any..."
+rm -f tmp/pids/delayed*.pid
+
+echo "Checking bundle dependencies..."
+bundle check || bundle install
+
+echo "Booting up..."
+bundle exec bin/delayed_job run -n 2

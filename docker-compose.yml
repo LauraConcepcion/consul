@@ -1,0 +1,67 @@
+version: '2'
+
+services:
+  app: &app_base
+    build: .
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+      # to be able to forward ssh-agent to github throught capistrano (bundle on server)
+      - "~/.ssh/id_rsa:/root/.ssh/id_rsa"
+      - $SSH_AUTH_SOCK:$SSH_AUTH_SOCK
+    environment: &app_environment
+      TZ: Europe/Madrid
+      # to keep bundle effect between container restarts (withou rebuild):
+      BUNDLE_PATH: /usr/src/app/.bundle
+      BUNDLE_APP_CONFIG: /usr/src/app/.bundle
+      DATABASE_HOST: db
+      MEMCACHED_HOST: cache
+      SSH_AUTH_SOCK: # this left empty copies from outside env
+    command: 'bin/start'
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+      - cache
+      - queue
+      - mail
+  queue:
+    # import app's config to run delayed_job workers
+    <<: *app_base
+    ports: [] # dont open 300 also, it would collide with app's
+    depends_on:
+      - db
+      - cache
+      - mail
+    environment:
+      <<: *app_environment
+      QUEUE: default
+    command: 'bin/start_queue'
+  cache:
+    image: memcached
+    ports:
+      - "11211"
+  mail:
+    image: hinshun/mailcatcher
+    ports:
+      - 1080:1080 # open browser here to warch mails sent by rails, use smtp to 1025 as config
+  db:
+    image: mysql:5.5
+    environment:
+      MYSQL_DATABASE: my_project_development
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      # max_allowed_packet=32M' or any other custom config for mysql
+      - './config/mysql:/etc/mysql/conf.d/'
+    ports:
+      # expose the port on localhost to use db GUI
+      - "3306:3306"
+## In case of postgres
+#  db:
+#    image: postgres
+#    ports:
+#      - "5432:5432"
+#    environment:
+#      POSTGRES_DB: my_project_development
+#      POSTGRES_USER: root
+#      POSTGRES_PASSWORD: root
